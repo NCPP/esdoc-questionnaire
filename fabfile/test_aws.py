@@ -45,3 +45,16 @@ class TestAwsManager(unittest.TestCase):
         finally:
             i1.terminate()
         self.assertEqual(m.get_instances(), {})
+
+    def test_name_must_be_unique(self):
+        m = AwsManager(conf_path=CONF_PATH)
+        self.assertEqual(m.get_instances(), {})
+        try:
+            i1 = m.launch_new_instance('_foo_test_4', wait=True)
+            i2 = m.launch_new_instance('_foo_test_4', wait=True)
+        finally:
+            try:
+                i1.terminate()
+                i2.terminate()
+            except UnboundLocalError:
+                pass
