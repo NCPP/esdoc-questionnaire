@@ -44,3 +44,4 @@ class TestAwsManager(unittest.TestCase):
             self.assertNotEqual(i1.update(), 'running')
         finally:
             i1.terminate()
+        self.assertEqual(m.get_instances(), {})

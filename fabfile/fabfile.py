@@ -36,17 +36,21 @@ def to_fabric_str(sequence):
 @task(default=True)
 def deploy():
     # upgrade()
-    install_virtual_environment()
-    install_pip_packages()
-    # install_questionnaire()
+    # install_virtual_environment()
+    # install_pip_packages()
+    install_questionnaire()
+
 
 
 @task
 def launch_aws():
     import aws
     m = aws.AwsManager(conf_path=CONF_PATH)
-    import ipdb;ipdb.set_trace()
-
+    instance = m.launch_new_instance(cfg['aws_instance_name'])
+    parser.set('fabric', 'host', instance.public_dns_name)
+    parser.set('fabric', 'aws_instance_id', instance.id)
+    with open(CONF_PATH, 'w') as f:
+        parser.write(f)
 
 @task
 def upgrade():
