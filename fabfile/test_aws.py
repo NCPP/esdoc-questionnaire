@@ -51,7 +51,8 @@ class TestAwsManager(unittest.TestCase):
         self.assertEqual(m.get_instances(), {})
         try:
             i1 = m.launch_new_instance('_foo_test_4', wait=True)
-            i2 = m.launch_new_instance('_foo_test_4', wait=True)
+            with self.assertRaises(ValueError):
+                i2 = m.launch_new_instance('_foo_test_4', wait=True)
         finally:
             try:
                 i1.terminate()
