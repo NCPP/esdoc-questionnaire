@@ -4,21 +4,21 @@ import time
 from fabric.contrib.files import append
 from fabric.state import env
 from fabric.decorators import task
-from fabric.operations import sudo, run
-from fabric.context_managers import cd, prefix
+from fabric.operations import sudo, run, put, local
+from fabric.context_managers import cd, prefix, settings
 import os
 
 
 # Path to the configuration file containing secret values.
 CONF_PATH = os.path.join(os.path.expanduser('~'), '.config', 'esdoc-questionnaire.conf')
-parser = SafeConfigParser()
-parser.read(CONF_PATH)
+env.parser = SafeConfigParser()
+env.parser.read(CONF_PATH)
+env.cfg = dict(env.parser.items('fabric'))
 
-cfg = dict(parser.items('fabric'))
 
-env.user = cfg['user']
-env.hosts = [cfg['host']]
-env.key_filename = cfg['key_filename']
+env.user = env.cfg['user']
+env.hosts = [env.cfg['host']]
+env.key_filename = env.cfg['key_filename']
 
 
 def install_apt_package(name):
@@ -35,34 +35,30 @@ def to_fabric_str(sequence):
 
 @task(default=True)
 def deploy():
-    # upgrade()
-    # install_virtual_environment()
-    # install_pip_packages()
-    install_questionnaire()
-
+    upgrade()
+    install_virtual_environment()
+    install_pip_packages()
+    install_questionnaire(CONF_PATH)
+    run_questionnaire_tests()
 
 
 @task
 def launch_aws():
     import aws
     m = aws.AwsManager(conf_path=CONF_PATH)
-    instance = m.launch_new_instance(cfg['aws_instance_name'])
-    parser.set('fabric', 'host', instance.public_dns_name)
-    parser.set('fabric', 'aws_instance_id', instance.id)
+    instance = m.launch_new_instance(env.cfg['aws_instance_name'])
+    env.parser.set('fabric', 'host', instance.public_dns_name)
+    env.parser.set('fabric', 'aws_instance_id', instance.id)
     with open(CONF_PATH, 'w') as f:
-        parser.write(f)
+        env.parser.write(f)
+
 
 @task
 def upgrade():
     sudo('apt-get update')
     sudo('apt-get upgrade -y')
 
-# @task
-# def install_apt_packages():
-#     cmd = ['apt-get','-y','install','g++','libz-dev','curl','wget','python-dev',
-#            'python-pip','libgdal-dev','ipython','python-gdal','git']
-#     sudo(' '.join(cmd))
-            
+
 @task
 def install_virtual_environment():
     install_apt_package('python-dev')
@@ -87,7 +83,7 @@ def install_virtual_environment():
     append('~/.profile', lines)
     run(to_fabric_str(['source', '~/.profile']))
 
-    run(to_fabric_str(['mkvirtualenv', cfg['venv_name']]))
+    run(to_fabric_str(['mkvirtualenv', env.cfg['venv_name']]))
 
 
 @task
@@ -97,7 +93,7 @@ def install_pip_packages():
     install_apt_package('libxml2')
     install_apt_package('libxml2-dev')
     install_apt_package('libxslt1-dev')
-    with prefix(to_fabric_str(['workon', cfg['venv_name']])):
+    with prefix(to_fabric_str(['workon', env.cfg['venv_name']])):
         packages = [
                     'django',
                     'South',
@@ -105,16 +101,49 @@ def install_pip_packages():
                     'ipython',
                     'ipdb',
                     'psycopg2',
-                    'lxml']
+                    'lxml',
+                    'guppy',
+                    'pillow',
+                    'django-authopenid',
+                    ]
         for package in packages:
             install_pip_package(package)
 
 
 @task
-def install_questionnaire():
+def install_questionnaire(host_conf_path):
     install_apt_package('git')
-    run(to_fabric_str(['mkdir', '-p', cfg['git_clone_dir']]))
-    with cd(cfg['git_clone_dir']):
-        run(to_fabric_str(['git', 'clone', cfg['git_url'], cfg['git_repo_name']]))
-        with cd(cfg['git_repo_name']):
-            run(to_fabric_str(['git', 'checkout', cfg['git_branch']]))
+    run(to_fabric_str(['mkdir', '-p', env.cfg['git_clone_dir']]))
+    run('mkdir ~/.config')
+
+    with settings(sudo_user="postgres"):
+        sudo(to_fabric_str(['createuser', '-s', env.cfg['user']]))
+
+    ## create the default database for the root user. required to run psql on the server.
+    run('createdb')
+
+    ## create the django project database
+    run(to_fabric_str(['createdb', env.parser.get('database', 'name')]))
+
+    ## copy the configuration file to the remote host
+    put(local_path=host_conf_path, remote_path='~/.config/esdoc-questionnaire.conf')
+
+    sql = '''"CREATE ROLE {0} LOGIN SUPERUSER ENCRYPTED PASSWORD '{1}';"'''.format(env.parser.get('database', 'user'), env.parser.get('database', 'password', raw=True))
+    run(to_fabric_str(['psql', '-c', sql]))
+
+    with cd(env.cfg['git_clone_dir']):
+        run(to_fabric_str(['git', 'clone', env.cfg['git_url'], env.cfg['git_repo_name']]))
+        with cd(env.cfg['git_repo_name']):
+            run(to_fabric_str(['git', 'checkout', env.cfg['git_branch']]))
+            with cd('CIM_Questionnaire'):
+                with prefix(to_fabric_str(['workon', env.cfg['venv_name']])):
+                    run('python manage.py syncdb --noinput')
+
+
+@task
+def run_questionnaire_tests():
+    dirs = ['git_clone_dir', 'git_repo_name']
+    app_path = os.path.join(*[env.cfg[d] for d in dirs]+['CIM_Questionnaire'])
+    with cd(app_path):
+        with prefix(to_fabric_str(['workon', env.cfg['venv_name']])):
+            run('python manage.py test')
