@@ -8,10 +8,10 @@ import time
 
 class AwsManager(object):
 
-    def __init__(self, conf_path, filtered=True, allow_terminated=False):
+    def __init__(self, conf_path, filtered=True, only_running=True):
         self.conf_path = conf_path
         self.filtered = filtered
-        self.allow_terminated = allow_terminated
+        self.only_running = only_running
         self._conn = None
         self._parser = SafeConfigParser()
         self._parser.read(self.conf_path)
@@ -27,7 +27,7 @@ class AwsManager(object):
         reservations = self.conn.get_all_reservations()
         instances = [i for r in reservations for i in r.instances]
         instances = {i.id: i for i in instances}
-        if not self.allow_terminated:
+        if self.only_running:
             instances = {i.id: i for i in instances.values() if i.update() == 'running'}
         if self.filtered:
             instances = {i.id: i for i in instances.values() if self._filter_(i)}
@@ -82,3 +82,13 @@ class AwsManager(object):
                 status = instance.update()
 
         return(instance)
+
+    def get_instance_by_name(self, name):
+        ret = None
+        for instance in self.get_instances().itervalues():
+            if instance.tags['Name'] == name:
+                ret = instance
+        if ret is None:
+            raise(ValueError('Name not found.'))
+        else:
+            return(ret)

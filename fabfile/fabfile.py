@@ -43,10 +43,11 @@ def deploy():
 
 
 @task
-def launch_aws():
+def launch_aws(name=None):
     import aws
+    name = name or env.cfg['aws_instance_name']
     m = aws.AwsManager(conf_path=CONF_PATH)
-    instance = m.launch_new_instance(env.cfg['aws_instance_name'])
+    instance = m.launch_new_instance(name)
     env.parser.set('fabric', 'host', instance.public_dns_name)
     env.parser.set('fabric', 'aws_instance_id', instance.id)
     with open(CONF_PATH, 'w') as f:

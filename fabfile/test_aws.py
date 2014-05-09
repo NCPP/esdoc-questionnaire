@@ -6,13 +6,18 @@ from fabfile import CONF_PATH
 
 class TestAwsManager(unittest.TestCase):
 
+    @classmethod
+    def tearDownClass(cls):
+        m = AwsManager(CONF_PATH)
+        assert(m.get_instances() == {})
+
     def test_constructor(self):
         filtered = [True, False]
-        allow_terminated = [True, False]
+        only_running = [True, False]
         conf_path = [None, CONF_PATH]
-        for f, a, c in itertools.product(filtered, allow_terminated, conf_path):
+        for f, a, c in itertools.product(filtered, only_running, conf_path):
             try:
-                m = AwsManager(c, filtered=f, allow_terminated=a)
+                m = AwsManager(c, filtered=f, only_running=a)
                 self.assertIsInstance(m._cfg, dict)
             except TypeError:
                 if c is None:
@@ -20,8 +25,17 @@ class TestAwsManager(unittest.TestCase):
                 else:
                     raise
 
+    def test_get_instance_by_name(self):
+        m = AwsManager(CONF_PATH)
+        i1 = m.launch_new_instance('_foo_name_test', wait=True)
+        try:
+            instance = m.get_instance_by_name('_foo_name_test')
+            self.assertEqual(instance.tags['Name'], '_foo_name_test')
+        finally:
+            i1.terminate()
+
     def test_launch_instance_with_wait(self):
-        m = AwsManager(conf_path=CONF_PATH)
+        m = AwsManager(CONF_PATH)
         # print('launching 1')
         i1 = m.launch_new_instance('_foo_test_1')
         self.assertEqual(i1.tags['Name'], '_foo_test_1')
@@ -38,7 +52,7 @@ class TestAwsManager(unittest.TestCase):
         self.assertEqual(m.get_instances(), {})
 
     def test_launch_instance_without_wait(self):
-        m = AwsManager(conf_path=CONF_PATH)
+        m = AwsManager(CONF_PATH)
         i1 = m.launch_new_instance('_foo_test_1', wait=False)
         try:
             self.assertNotEqual(i1.update(), 'running')
@@ -47,7 +61,7 @@ class TestAwsManager(unittest.TestCase):
         self.assertEqual(m.get_instances(), {})
 
     def test_name_must_be_unique(self):
-        m = AwsManager(conf_path=CONF_PATH)
+        m = AwsManager(CONF_PATH)
         self.assertEqual(m.get_instances(), {})
         try:
             i1 = m.launch_new_instance('_foo_test_4', wait=True)
