@@ -105,6 +105,8 @@ def install_pip_packages():
                     'guppy',
                     'pillow',
                     'django-authopenid',
+                    'webtest',
+                    'django-webtest'
                     ]
         for package in packages:
             install_pip_package(package)
