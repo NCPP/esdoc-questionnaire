@@ -1,0 +1,29 @@
+[database]
+engine = django.db.backends.postgresql_psycopg2
+name = questionnaire
+user =
+password =
+host = 127.0.0.1
+port = 5432
+
+[settings]
+secret_key =
+static_root = static/
+
+[fabric]
+host =
+key_filename =
+user = ubuntu
+venv_name = esdoc-questionnaire
+git_url = https://github.com/NCPP/esdoc-questionnaire.git
+git_branch = devel
+git_repo_name = esdoc-questionnaire
+git_clone_dir = ~/src
+aws_instance_name = esdoc-questionnaire
+aws_instance_id =
+
+[aws]
+access_key_id =
+secret_access_key =
+key_name =
+
